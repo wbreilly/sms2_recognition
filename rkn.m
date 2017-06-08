@@ -6,9 +6,12 @@
 
 %% Intro stuff (like cleaning up, etc.)
 
-initialize_ABCDCon
-RandStream.setGlobalStream(RandStream('mt19937ar','seed',sum(100*clock))); %sets random number generators to a random seed
-cd(scriptsTask);
+tic;
+clear all;
+close all;
+fclose('all');
+sca;
+rand('seed',sum(100*clock));
 
 %% Flags
 DEBUGGING_FLAG=0;
@@ -27,25 +30,6 @@ startscreen = 'If you have any questions, please ask the experimenter now.\n\n O
 %Timing
 quesduration = 3.000*fast;
 
-%% Counterbalance info
-
-fprintf('Loading context enc CB info.\n');
-load(strcat(rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_contextencCB_s',num2str(subject,'%03d')));
-
-fprintf('Determining other CB.\n');
-if practice==1 %&& mod(subject,2)==1
-    name1 = 'Halle';
-    name2 = 'Rob';
-    locationscale = ['(1)' name1 'Rm1   '     '(2)' name1 'Rm2  '      '(3)' name2 'Rm1     '      '(4)' name2 'Rm2\n'];
-elseif ~practice && strcmp(name1,'Alex') && strcmp(house1,'C:\Users\dynamic\Desktop\Halle\abcdcon_code\stimuli\Movies_Mp4Versions\Model_25_Brown_HiddenLayers_BirdsEyeAtEnd.mp4')
-    locationscale = ['(1)' name1 'Rm1   '     '(2)' name1 'Rm2  '      '(3)' name2 'Rm1     '      '(4)' name2 'Rm2\n'];
-elseif ~practice && strcmp(name1,'Jamie') && strcmp(house1,'C:\Users\dynamic\Desktop\Halle\abcdcon_code\stimuli\Movies_Mp4Versions\Model_25_Brown_HiddenLayers_BirdsEyeAtEnd.mp4')
-    locationscale = ['(1)' name1 'Rm1   '     '(2)' name1 'Rm2  '      '(3)' name2 'Rm1     '      '(4)' name2 'Rm2\n'];
-elseif ~practice && strcmp(name1,'Alex') && strcmp(house1,'C:\Users\dynamic\Desktop\Halle\abcdcon_code\stimuli\Movies_Mp4Versions\Model_25_Gray_HiddenLayers_BirdsEyeAtEnd.mp4')
-    locationscale = ['(1)' name2 'Rm1   '     '(2)' name2 'Rm2  '      '(3)' name1 'Rm1     '      '(4)' name1 'Rm2\n'];
-elseif ~practice && strcmp(name1,'Jamie') && strcmp(house1,'C:\Users\dynamic\Desktop\Halle\abcdcon_code\stimuli\Movies_Mp4Versions\Model_25_Gray_HiddenLayers_BirdsEyeAtEnd.mp4')
-    locationscale = ['(1)' name2 'Rm1   '     '(2)' name2 'Rm2  '      '(3)' name1 'Rm1     '      '(4)' name1 'Rm2\n'];
-end %if
 
 %% Initialize file where will write data
 
@@ -98,23 +82,7 @@ elseif ~practice && subject < 99 && exist([rawBehavDir,'s',num2str(subject,'%03d
 else
     % Read in stimulus info
     fprintf('Reading in stimnames using tdfread.\n');
-    videos = tdfread('StimList_ByObject_040714.txt');
-    videos.MovieID = cellstr(videos.MovieID);
-    videos.ObjectIDinMovie = cellstr(videos.ObjectIDinMovie); 
-    videos.ObjectNumber = cellstr(videos.ObjectNumber);
-    videoID = unique(videos.MovieID);
-    if exist((strcat(rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_objectEnc_s',num2str(subject,'%03d'),'+.dat')),'file')
-        altfile = input('ObjEnc+ file exists. Load this file?: (Y=1,N=0)');
-        if altfile
-            encdata = tdfread(strcat(rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_objectEnc_s',num2str(subject,'%03d'),'+.dat'),',');
-        else
-            encdata = tdfread(strcat(rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_objectEnc_s',num2str(subject,'%03d'),'.dat'),',');
-        end %if
-    else
-        encdata = tdfread(strcat(rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_objectEnc_s',num2str(subject,'%03d'),'.dat'),',');
-    end %if exist
-    encdata.ObjectID = cellstr(encdata.ObjectID);
-    nobjects=length(encdata.ObjectID);
+    
     
     % Determining randomized object order
     randObjectOrder = randperm(nobjects);
