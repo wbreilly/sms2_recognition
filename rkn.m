@@ -18,338 +18,251 @@ DEBUGGING_FLAG=0;
 
 %% Script-specific variables
 
+% setting parameters
+duration_item_retrieval      = 1000/1000;   % 1000
+duration_isi_retrieval       = 4000/1000;   % 3000
+duration_blank               = 1500/1000;
+
+%%
+
+
 subject=input('Enter subject number: ');    % Ask for subject number input first
 practice=input('Select 1 for practice, 0 for task: ');
 
 %Instructions text
-instruc = 'You will now be presented with items and asked\n to recall where you saw the item earlier\n using the following scale:\n\n';
-instruc2 = 'If you cannot remember where you saw the object,\n you should make your best guess.\n';
-location_q = 'Where did you see this object earlier?\n';
-startscreen = 'If you have any questions, please ask the experimenter now.\n\n Otherwise, please hit ENTER to begin.\n';
-
-%Timing
-quesduration = 3.000*fast;
-
+instruc = 'You will now be presented with verbs and asked\n to recall whether you studied it on the scanning day :\n\n';
 
 %% Initialize file where will write data
 
 fprintf('Setting up data file.\n');
 
-%write to .dat files
-datafilename = strcat(rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_locationRecog_s',num2str(subject,'%03d'),'.dat');  % name of data file to write to but not creating a file
+if sub_num < 0 || sub_num > 99
+    error('Invalid subject number!!!');
+end
 
-% read existing result file and prevent overwriting files from a previous subject (except for subjects > 99)
-if DEBUGGING_FLAG 
-    datafilename = strcat(rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_locationRecog_s',num2str(subject,'%03d'),'.dat'); %overwrite existing file
-    datafilepointer = fopen(datafilename,'wt');
-elseif ~practice
-    if subject <99 && fopen(datafilename, 'rt')~=-1; %r = open a file for reading. t = open in text mode. -1 is the value returned when fopen cannot open a file (e.g., if this file doens't exist yet--which is normally what you want bc it means you won't be overwriting anything!)
-        tmp = input('Data file already exists! Override? (Y=1) ');
-        tmp2 = input('Write over existing file? (Y=3,N=2) ');
-        if tmp==1 && tmp2==2
-            while fopen(datafilename,'rt')~=-1;
-                [a b c] = fileparts(datafilename);
-                datafilename = strcat(a,filesep,b,'+',c); %don't ever overwrite orig file--if a file for that subject number already exists and you override (ie, say it's okay to reuse that subject number), create the file but append '+' to the end. 
-            end
-            datafilepointer = fopen(datafilename,'wt'); % open ASCII file for writing..w = open for writing, discard existing contents. t = text mode
-        elseif tmp==1 && tmp2==3
-            %overwrite existing file
-            datafilename = strcat(rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_locationRecog_s',num2str(subject,'%03d'),'.dat'); %overwrite existing file
-            datafilepointer = fopen(datafilename,'wt');
-        else
-            fclose('all');
-            error('Choose a different subject number.');
-        end
-    else
-        datafilepointer = fopen(datafilename,'wt'); % open ASCII file for writing
+recog_dat = sprintf('s%02d_recognition%d.dat',sub_num, cycle_num);
+recog_mat = sprintf('s%02d_recognition%d.mat',sub_num, cycle_num);
+
+
+if fopen(recog_dat,'rt') ~= -1 
+    fclose('all');
+    yes_or_no = input('Data file already exists! Are you sure you want to overwrite the file? (yes:1 no:0) ');
+    if yes_or_no == 0 || isempty(yes_or_no)
+        error('Enter a different subject or block number!');
     end
-end %if
+end
 
-%% Save out sequence
+% write results into result file
+fid_recog = fopen(recog_dat,'wt');
+
+%% Load stim and save subject specific presentation order 
 
 if practice
     % "Read in" stimulus info
-    load([rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_objenc_practiceSeq_',num2str(subject,'%03d')]);
-    nobjects = length(stimlist.objInScene);
-    videos.Lure = ones(1,nobjects);
-    randObjectOrder = randperm(nobjects);
-
-    % Save out sequence
-    save([rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_locrec_practiceSeq_',num2str(subject,'%03d')],'stimlist','videos','nobjects');
-elseif ~practice && subject < 99 && exist([rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_locrec_seq_',num2str(subject,'%03d'),'.mat'],'file')
-    fprintf('Loading sequence for subject %03d.\n',subject)
-    load([rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_locrec_seq_',num2str(subject,'%03d')]);
+   
 else
     % Read in stimulus info
-    fprintf('Reading in stimnames using tdfread.\n');
-    
+    fprintf('Reading in stimuli.\n');
+    recog_stim = sprintf('sms2_recognition_stim.txt');
+    tmp = readtable(recog_stim, 'ReadVariableNames',false);
+    all_stim = table2array(tmp);
+    clear tmp
     
     % Determining randomized object order
-    randObjectOrder = randperm(nobjects);
-
-    for iobject=1:nobjects
-        stimlist{iobject} = encdata.ObjectID{randObjectOrder(iobject)};
-    end %iobject=
+    sub_stim = Shuffle(all_stim);
+    %save stim presentation order
+    save(recog_mat, sub_stim);
     
-    % Save out sequence 
-    save([rawBehavDir,'s',num2str(subject,'%03d'),filesep,'ConABCD_locrec_',num2str(subject,'%03d')],'encdata','videos','nobjects','stimlist','randObjectOrder','locationscale');
+    
 end %if
 
-%% Psychtoolbox stuff
 
-fprintf('Setting up PTB stuff.\n');
-%Check to see if has OpenGL compatibility; will abort if not compatible.
-AssertOpenGL;  
-
-% Dummy calls (prevents delays)
-KbCheck; %Check the status of the keyboard. If any key is down (i.e., on/pressed), this will return the value 1. If not, 0.
-WaitSecs(waitbtwninstruc); %Have script wait for (n) seconds (basically while matlab loads)
-GetSecs; %report time back in a very accurate way
-
-%swap from PTB's internal naming system to current keybord naming system
-KbName('UnifyKeyNames'); 
-%name the keys that subjects will be using
-enter = KbName('return');
-escapeKey = KbName('ESCAPE');
-oneResp = KbName('1!');
-twoResp = KbName('2@');
-threeResp = KbName('3#');
-fourResp = KbName('4$');
-fiveResp = KbName('5%');
-enablekeys = [oneResp twoResp threeResp fourResp fiveResp enter escapeKey];
-keylist=zeros(1,256);%%create a list of 256 zeros
-keylist(enablekeys)=1;%%set keys you interested in to 1
-
-% Initialize PsychHID (MEX file that communicates with HID-compliant devices such as USB keyboards, etc.) and get list of devices
-clear PsychHID;
-if strcmp(name,'red');
-    resp_device = [];
-else
-    devices = PsychHID('devices'); 
-    %If Current Designs Keyboard is detected, make it the response device. Otherwise, use any keyboard.
-    if ~isempty(find(strcmp({devices.manufacturer}, 'Current Designs, Inc.') & strcmp({devices.usageName}, 'Keyboard'),1));
-        resp_device = find(strcmp({devices.manufacturer}, 'Current Designs, Inc.') & strcmp({devices.usageName}, 'Keyboard'));
-    else
-        resp_device = find(strcmp({devices.usageName}, 'Keyboard'));
-    end
-end %if 
-
-%% Initialize the experiment 
-
-%try/catch statement
-try
-    %% Set up PTB stuff (like the screen) 
-    
-    fprintf('Setting up PTB screen.\n');
-    % Get screenNumber of stimulation display, and choose the maximum index, which is usually the right one.
+%% INITIZLIAING PSYCHTOOLBOX
+    AssertOpenGL;
+    % dummy calls to GetSecs/WaitSecs/KbCheck to make sure they are loaded without delays in the wrong moment
+    KbCheck;
+    WaitSecs(0.1);
+    GetSecs;
+    % get screenNumber of stimulation display. 
     screens=Screen('Screens');
     screenNumber=max(screens);
+    % hide the mouse cursor
     HideCursor;
-    
-    % Open a double buffered fullscreen window on the stimulation screen 'screenNumber' and use 'gray' for color
-    % 'w' is the handle used to direct all drawing commands to that window
-    % 'wRect' is a rectangle defining the size of the window. See "help PsychRects" for help on such rectangles
-    [w, wRect]=Screen('OpenWindow',screenNumber, screenColor);
+    black=BlackIndex(screenNumber);
+    % open a double buffered fullscreen window on the stimulation screen
+    % 'screenNumber' and choose/draw a gray background. 'w' is the handle
+    % used to direct all drawing commands to that window - the "Name" of
+    % the window. 'wRect' is a rectangle defining the size of the window.
+    % See "help PsychRects" for help on such rectangles and useful helper
+    % functions:
+    [w, wRect]=Screen('OpenWindow',screenNumber,black); %,[0 0 680 480]);  %for testing use
+    %get the midpoint (mx, my) of this window
     [mx, my] = RectCenter(wRect);
-    scene_x = 350;
-    scene_y = 350;
-    scene_mtx = [mx-scene_x/2,my-scene_y/2,mx+scene_x/2,my+scene_y/2]';
-    ytext = (my*2)-100;
+    %get screen size
+    [x_dim, y_dim] = RectSize(wRect);
+    % set priority for script execution to realtime priority
+    priorityLevel=MaxPriority(w);
+    Priority(priorityLevel);
+
+    % prepare fixation cross
+    fixCr=zeros(50,50);
+    fixCr(24:27,:)=255;
+    fixCr(:,24:27)=255;  
+    fixposition = [mx-25,my-25,mx+25,my+25];
+
+    % configure keyboard & prepare question message
+    KbName('UnifyKeyNames');
+    key_rem = KbName('Rightarrow'); 
+    key_fam = KbName('Downarrow'); 
+    key_new = KbName('Leftarrow');
+    % if mod(sub_num,2) == 1
+    %     key_yes = KbName('Rightarrow');        
+    %     key_no = KbName('Leftarrow');
+    % else
+    %     key_yes = KbName('Leftarrow');        
+    %     key_no = KbName('Rightarrow'); 
+    % end
+
+    % study result file headers
+    fprintf(fid_recog,strcat('Remember:',KbName(key_rem),'New:',KbName(key_new),'Familiar:',KbName(key_fam),'\n'));
+    fprintf(fid_recog,'sub item key_press response rt\n');
+
+    KeyCode = zeros(1,256);
+    KeyIsDown = zeros(1,1);
+    endrt = zeros(1,1);
+
+    % specify variables
+    keybutton = [];
+    RECOGNITION = struct;
+
+    % clear screen objects
+    Screen('Close');
+
+
+    %% RECOGNITION 
+    RestrictKeysForKbCheck([key_rem,key_new, key_fam]);
+
+    % show study message
+    Screen('TextSize', w, 30);
+    % prepare message
+    DrawFormattedText(w, instruct, 'center','center', WhiteIndex(w));
+    % update the display to show the study message
+    Screen('Flip', w);
+    % wait for mouse click:
+    GetClicks(w);
+
+
+    % update the display to show blank screen for 1.5 seconds
+    Screen('Flip', w);
+    WaitSecs(duration_blank);
+    % draw fixation cross
+    fixcross = Screen('MakeTexture',w,fixCr);
+    Screen('DrawTexture', w, fixcross,[],fixposition);
+    Screen('Flip', w);
+    WaitSecs(duration_isi_retrieval);
     
-    % Set text size
-    Screen('TextSize', w, fontSize);
+    %%
     
-    Priority(MaxPriority(w));   % Set priority for script execution to realtime priority
+    % pre-set variables 
+    default_ans = {'no_resp'};
+    stamp_item_retrieval = NaN(length(sub_stim,1));          % create a nx1 matrix to contain item onsets in each study block
+    stamp_fixation_retrieval = NaN(length(sub_stim,1));      % create a nx1 matrix to contain onsets of ISI "+"
+    response = repmat(default_ans,NaN(length(sub_stim,1)));      % create a nx1 matrix to contain responses for living/nonliving judgments 
+    rt = NaN(length(sub_stim,1));                            % create a nx1 matrix to contain rts for judgments
+    acc = zeros(length(sub_stim,1));                         % create a nx1 matrix to contain accs for judgments
+    keypress = repmat(default_ans,(length(sub_stim,1)));      % create a nx1 matrix to contain pressed keys for judgments
     
-    if strcmp(computer,'PCWIN') == 1
-        ShowHideWinTaskbarMex(0);
-    end
-    
-    % Initialize KbCheck and return to zero in case a button is pressed
-    [KeyIsDown, endrt, KeyCode]=KbCheck;
-    KeyIsDown = zeros(size(KeyIsDown));
-    endrt = zeros(size(endrt));
-    KeyCode = zeros(size(KeyCode));
-    WaitSecs(waitbtwninstruc); %add this to clear out responses so KbCheck will be 0 rather than 1 
-    
-    %% Give instructions
-    
-    fprintf('Giving instructions.\n');
-    %pull the first screen of instructions
-    DrawFormattedText(w, [instruc linebreak locationscale linebreak instruc2 linebreak startscreen], 'center', 'center', [255 255 255]);  % Write instructions
-    Screen('Flip', w);   % Update display to show instructions
-   
-    % Display instructions 'til KbCheck detects enter pressed
-    %keyboard
-    while (KeyCode(enter)==0)
-        [KeyIsDown, RT, KeyCode]=KbCheck; 
-        WaitSecs(waitbtwninstruc);    % Prevents overload  
-    end
-    
-    %% Recog task
-    
-    fprintf('Starting the experiment.\n');
-    
-    %Clear out KBCheck, set things to 0, etc. 
-    [KeyIsDown, endrt, KeyCode]=KbCheck;
-    KeyIsDown = zeros(size(KeyIsDown));
-    endrt = zeros(size(endrt));
-    KeyCode = zeros(size(KeyCode));
-    WaitSecs(waitbtwninstruc); %add this to clear out responses so KbCheck will be 0 rather than 1
-    
-    trialcounter = 0;
-    for iobject=1:nobjects;
-%     for iobject=1:4; %use for debugging
-        trialcounter = trialcounter + 1;
         
-            %Wait til after the trigger to disable the trigger check
-            RestrictKeysForKbCheck(enablekeys);
+    %%
+    
+    for i_word = 1:length(sub_stim)
+    
+        DrawFormattedText(w, sub_stim{i_word}, 'center','center', WhiteIndex(w));
+        [VBLTimestamp stamp_item_retrieval(i_word)] = Screen('Flip', w);
 
-            %Added for KbQueue
-            KbQueueCreate(resp_device,keylist);
-
-            %Draw fixation cross
-            DrawFormattedText(w, fixation, 'center', 'center', [255 255 255]);  % Write fixation
-            [VBLTimestamp expstart]=Screen('Flip', w);  % Update display to show +
-            WaitSecs(1.000);    % Display + 
-
-            Screen('Close');    % Close to not overload
-
-            %Initialize KbCheck and return to zero in case a button is pressed
-            [KeyIsDown, endrt, KeyCode]=KbCheck;
-            KeyIsDown = zeros(size(KeyIsDown));
-            endrt = zeros(size(endrt));
-            KeyCode = zeros(size(KeyCode));
-            WaitSecs(waitbtwninstruc); %add this to clear out responses so KbCheck will be 0 rather than 1
-
-            %load image
-            if ~practice
-                probe = [stimAloneDir,stimlist{iobject},file_ext]; 
-            else
-                probe = [practicestimdir,stimlist.objAlone{randObjectOrder(iobject)},file_ext];
-            end %if
-            probe = imread(probe); 
-            showprobe = Screen('MakeTexture',w,probe);
-            %present image
-            Screen('DrawTexture',w,showprobe,[],image_resize);
-            DrawFormattedText(w,[location_q, linebreak locationscale],'center', ytext, [255 255 255]);
-            [VBLtimestamp locationQstart]=Screen('Flip',w);
-
-            % initialize KbCheck and variables to avoid time dealys
-            KeyIsDown = zeros(size(KeyIsDown));
-            endrt = zeros(size(endrt));
-            KeyCode = zeros(size(KeyCode));
-            %Added for KbQueue
-            KbQueueFlush();
-            KbQueueStart();
-            location_resp = '';
-            firstpress = [];
-
-            while (GetSecs - locationQstart) < quesduration 
-                if ~KeyIsDown%(enablekeys)  % if key is pressed, stop recording response
-                    [KeyIsDown firstpress KeyCode]=KbQueueCheck(resp_device);
-                    if KeyIsDown==1
-                    end %KeyIsDown
-                    WaitSecs(waitbtwninstruc);    % wait 1 ms before checking the keyboard again to prevent overload
-                end
-                
-                location_resp = KbName(find(firstpress,1,'last'));
-
-                if ~isempty(location_resp) % advances once one of the allowable keys is pressed
-                    if ismember(location_resp,{'1!','2@','3#','4$'})
-                        break;
-                    end %if ismember(
-                end %~isempty
-                
-            end %while (GetSecs - memqstart) < quesduration
-            
-            if isempty(location_resp) %added to deal w when subj doesn't make mem resp
-                location_resp = 'xx';
-            end %
-
-            endrt = min(firstpress(find(firstpress)));            
-            location_rt=round(1000*(endrt-locationQstart)); % compute reaction time
-
-        if practice && iobject==nobjects
-            DrawFormattedText(w, 'You have completed the practice.\n','center', 'center', [255 255 255]);
-            Screen('Flip', w);   % Update display to show instructions
-            while (KeyCode(enter)==0)
-                [KeyIsDown, foo, KeyCode]=KbCheck;
-                WaitSecs(waitbtwninstruc);    % Prevents overload
+        % manually clear keyboard events 
+        KeyCode = zeros(1,256);
+        KeyIsDown = zeros(1,1);
+        endrt = zeros(1,1);
+        % read keyboard events
+        while ((GetSecs - stamp_item_retrieval(i_word)) <= duration_item_retrieval)
+            if (KeyCode(key_rem)==0 && KeyCode(key_fam)==0) && KeyCode(key_no)==new)
+                [KeyIsDown, endrt, KeyCode]=KbCheck;
+                WaitSecs(0.001);
             end
-        elseif iobject==nobjects && ~practice
-            DrawFormattedText(w, endscreen, 'center', 'center', [255 255 255]);  % Write instructions
-            Screen('Flip', w);   % Update display to show instructions
-            while (KeyCode(enter)==0)
-                [KeyIsDown, foo, KeyCode]=KbCheck;
-                WaitSecs(waitbtwninstruc);    % Prevents overload
-            end 
-        end %if
+        end
+        % draw isi fixation
+        fixcross = Screen('MakeTexture',w,fixCr);
+        Screen('DrawTexture', w, fixcross,[],fixposition);
+        [VBLTimestamp stamp_fixation_retrieval(i_word)] = Screen('Flip', w);
+        % read keyboard events
+        while ((GetSecs - stamp_fixation_retrieval(i_word)) <= duration_isi_retrieval)
+            if (KeyCode(key_rem)==0 && KeyCode(key_fam)==0) && KeyCode(key_no)==new)
+                [KeyIsDown, endrt, KeyCode]=KbCheck;
+                WaitSecs(0.001);
+            end
+        end
 
-        %Initialize KbCheck and return to zero in case a button is pressed
-        [KeyIsDown, endrt, KeyCode]=KbCheck;
-        KeyIsDown = zeros(size(KeyIsDown));
-        endrt = zeros(size(endrt));
-        KeyCode = zeros(size(KeyCode));
-        WaitSecs(waitbtwninstruc); %add this to clear out responses so KbCheck will be 0 rather than 1
-        KbQueueFlush(); %Added for KbQueue
+        keybutton = find(KeyCode, 1, 'last');
+        if ~isempty(keybutton)
+            if strcmp(KbName(keybutton),KbName(key_rem))
+                response{i_word} = 'rem';
+            elseif strcmp(KbName(keybutton),KbName(key_fam))
+                response{i_retrieval_sequence,iitem} = 'fam';
+            elseif strcmp(KbName(keybutton),KbName(key_new))
+                response{i_retrieval_sequence,iitem} = 'new';
+            end
+            keypress{i_word} = KbName(keybutton);
+
+    % solve accuracy at a later date
+
+
+            rt(i_word) = ...
+                round(1000*(endrt - stamp_item_retrieval(i_word)));
+        end % end if ~isempty
+
+       % sub item key_press response rt
+        fprintf(fid_retrieval,'%d %s %s %s %d \n',...
+            sub_num,...
+            sub_stim{i_word},...
+            keypress{i_word},...
+            response{i_word},...
+            rt(i_word)); 
         
-        % Write trial result to file
-            if ~practice
-                % write header
-                if trialcounter==1
-                    fprintf(datafilepointer,'%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n',...
-                        'SubjectID','VideoID','ObjectIDinMovie','ObjectID','ExptStart',...
-                        'LocationQuesStart','LocationResp','CorrectLocationResp','LocationRT',...
-                        'Name1','House1','Name2','House2');
-                end %if
-                
-                % write data
-                fprintf('Saving data.\n');
-                [path1 fname1 ext1] = fileparts(house1);
-                [path2 fname2 ext2] = fileparts(house2);
-                
-                currObjMask = strcmp(videos.ObjectNumber,stimlist{iobject});
-                
-                fprintf(datafilepointer,'%03d,%s,%s,%s,%d,%d,%s,%d,%d,%s,%s,%s,%s\n',...
-                subject,...
-                videos.MovieID{currObjMask},...
-                videos.ObjectIDinMovie{currObjMask},...
-                videos.ObjectNumber{currObjMask},...
-                expstart,...
-                locationQstart,...
-                char(location_resp),...
-                videos.LocationID(currObjMask),...
-                location_rt,...
-                name1,...
-                fname1,...
-                name2,...
-                fname2);
-            end %if ~practice 
-%         end %if videos.Lure(randObjectOrder(iobject))==1
-    end %iobject=
+        % save mat
+        RECOGNITION.stamp_item_retrieval     = stamp_item_retrieval;
+        RECOGNITION.stamp_fixation_retrieval = stamp_fixation_retrieval;
+        RECOGNITION.response                 = response;
+        RECOGNITION.rt                       = rt;
+        RECOGNITION.keypress                 = keypress;
+        
+        save(recog_mat,'RECOGNITION');
+end % end i_word
+       
+        
+   
+    
     
     %% Finish up %%
     
-    % Cleanup at end of experiment
-    Screen('CloseAll');
-    ShowCursor;
-    fclose('all');
-    Priority(0);
-    ShowHideWinTaskbarMex(1)
-    
-    % End of experiment:
-    return;
+% Cleanup at end of experiment
+Screen('CloseAll');
+ShowCursor;
+fclose('all');
+Priority(0);
+ShowHideWinTaskbarMex(1)
 
-catch %try
-     % catch error in case something goes wrong in the 'try' part
-    % Do same cleanup as at the end of a regular session
-    
-    Screen('CloseAll');
-    ShowCursor;
-    fclose('all');
-    Priority(0);
-    ShowHideWinTaskbarMex(1)
-    
-    psychrethrow(psychlasterror);   % Output the error message that describes the error
-end
+% End of experiment:
+
+
+
+ % catch error in case something goes wrong in the 'try' part
+% Do same cleanup as at the end of a regular session
+
+Screen('CloseAll');
+ShowCursor;
+fclose('all');
+Priority(0);
+ShowHideWinTaskbarMex(1)
+
+psychrethrow(psychlasterror);   % Output the error message that describes the error
